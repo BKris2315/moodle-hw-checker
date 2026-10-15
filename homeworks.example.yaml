@@ -1,0 +1,113 @@
+# Course config for hwcheck.py: where the homeworks are, how they split into
+# problems, which model checks them. One file per course; copy it for another one.
+
+course_dir: "../My Course"   # moodle-dl course folder, relative to this file
+# Used in the model's instructions: "... homework submissions for a <course_description>."
+course_description: "university course on data science"
+# Reports and cache (relative to this file). Give every course its own folder.
+results_dir: "results"
+
+# `run` and `propose` first update the course folder with moodle-dl
+# (override with --sync / --no-sync). `path` is the folder holding moodle-dl's
+# config.json, relative to this file.
+moodle_dl:
+  sync_before_run: true
+  path: ".."
+
+# LLM used for checking (and grading). Command-line options override these.
+# Verdicts are cached per model: after switching, the first run re-checks everything.
+model:
+  backend: hf                           # hf = load with transformers | openai = vLLM / llama.cpp / Ollama server
+  name: Qwen/Qwen3-4B-Instruct-2507
+  load_in_4bit: false                   # needed for models of about 6B parameters and up on the T4
+  base_url: http://localhost:8000/v1    # only for backend: openai
+
+# Usable on the Tesla T4 (15 GB, fp16 only, no bf16) with backend: hf
+#   name                                  params  load_in_4bit  GPU memory     notes
+#   Qwen/Qwen3-4B-Instruct-2507             4.0B  false         ~8 GB + text   default; tested, good for the attempt check
+#   microsoft/Phi-4-mini-instruct           3.8B  false         ~8 GB + text   English-centric, weaker on other languages
+#   Qwen/Qwen3-8B                           8.2B  true          ~6 GB + text
+#   mistralai/Ministral-8B-Instruct-2410    8.0B  true          ~6 GB + text
+#   Qwen/Qwen3-14B                         14.8B  true          ~10 GB + text  largest that fits; recommended for grading
+#   meta-llama/Llama-3.1-8B-Instruct        8.0B  true          ~6 GB + text   gated: accept the license on HF + HF_TOKEN
+#   Qwen/Qwen3.5-4B, Qwen/Qwen3.5-9B        4.7B / 9.7B          multimodal, trained in bf16: untested on a T4
+#   google/gemma-4-E4B-it, gemma-4-12B-it   8.0B / 12B   true    multimodal: untested on a T4
+# With backend: openai (start the server yourself), e.g.
+#   vllm serve Qwen/Qwen3-8B-AWQ --dtype half --max-model-len 16384 --enforce-eager   -> name: Qwen/Qwen3-8B-AWQ
+#   llama-server -m gemma-4-12B-it-qat-q4_0.gguf -c 16384 --port 8000                -> name: gemma-4-12B
+
+# Grading (--grade): besides "submitted or not", score every problem against
+# the assignment text and write feedback. Scores are suggestions: review them.
+# Per problem you can set `points:` (default 10), and per homework
+# `grading_notes: "..."` with expected results or common mistakes.
+grading:
+  enabled: false
+  max_chars: 48000    # longer submission text than the check; ~15k tokens fits a T4 with the 4B/14B models
+
+# Homeworks to check by default (names below); empty = all. `--hw HW3,HW4`
+# overrides it. Unselected homeworks still count in the summary, using their
+# cached verdicts.
+check_homeworks: []
+
+required_fraction: 0.7
+# The 70% is taken of the problems of homeworks due by today. Deadlines come
+# from moodle-dl's calendar events (Events/<date> Homework N is due.html).
+# Per homework you can override with `due: "2026-10-01 23:59"` or `count: true/false`.
+# Setting this fixes the total instead (e.g. once the whole semester is known):
+# expected_total_problems: 20
+
+# Where the homeworks are. Two ways, which can be combined:
+#  1. A repeating folder pattern (`layout:` below): every folder matching
+#     homework_glob is a homework.
+#  2. An explicit list (`homeworks:` at the end): each entry gives a `folder:`
+#     (relative to course_dir, or absolute) and optionally its own paths.
+# The defaults below match moodle-dl's download layout:
+#   <course_dir>/<section>/<Homework N>/Assignment intro.md
+#   <course_dir>/<section>/<Homework N>/all_submissions/<Student Name (ID)>/<files>
+layout:
+  homework_glob: "*/Homework*"                  # glob(s) relative to course_dir; [] = only the explicit list
+  submissions_dir: "all_submissions"            # inside each homework folder: one folder per student
+  assignment_text: ["Assignment intro*.md"]     # glob(s) inside each homework folder (.md, .txt, .html, .ipynb)
+  student_dir_regex: '^(?P<name>.+?)\s*\((?P<code>[^()]+)\)$'   # "Name (ID)"; no match -> folder name is the ID
+
+# Homework folders to skip, e.g. leftovers from earlier years.
+# Remove one from here when it is released this semester.
+ignore_folders: []
+#  - "Week 9/Homework 5"
+
+# Explicit homeworks, and per-homework settings for the ones found by the pattern
+# (matched by `folder:`). Every key except `folder` is optional:
+#   name:            column name in the reports (default: "Homework 3" -> HW3)
+#   problems:        the problem list [{id, desc, points}]. If left out, the model
+#                    drafts it from the assignment text into <results_dir>/problems.yaml
+#                    and re-drafts it whenever the assignment text changes.
+#   submissions:     folder with one subfolder per student (default: <folder>/<submissions_dir>)
+#   assignment_text: file(s) with the task text (default: layout.assignment_text inside <folder>)
+#   templates:       instructor notebooks whose cells are not student work (default: notebooks in the section)
+#   due / count:     deadline "2026-10-01 23:59" / whether it counts toward the 70% (default: from Moodle Events)
+#   grading_notes:   hints for --grade
+# Example of a homework outside the pattern:
+#   - folder: "Final project"
+#     name: "Project"
+#     submissions: "Final project/uploads"
+#     assignment_text: "Final project/description.html"
+homeworks:
+  - name: "HW1"
+    folder: "Week 1/Homework 1"
+    # templates: ["Week 1/Practice 1/practice01.ipynb"]   # default: all instructor notebooks in "Week 1/"
+    problems:
+      - id: "A"
+        desc: "Load the dataset and report its size and summary statistics."
+      - id: "B"
+        desc: "Plot the distribution of the main variable on log-log axes."
+      - id: "C"
+        desc: "Written answer: interpret the plot and name one limitation of the data."
+        points: 5
+    # grading_notes: "Expected size: 1000 rows. Common mistake: linear axes."
+
+  # A homework outside the folder pattern:
+  # - folder: "Final project"
+  #   name: "Project"
+  #   submissions: "Final project/uploads"
+  #   assignment_text: "Final project/description.html"
+  #   due: "2026-12-15 23:59"

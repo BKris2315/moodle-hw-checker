@@ -1,0 +1,6 @@
+pyyaml
+# Only needed for --backend hf (on the GPU machine):
+torch
+transformers>=4.56
+accelerate
+bitsandbytes   # for --load-in-4bit
